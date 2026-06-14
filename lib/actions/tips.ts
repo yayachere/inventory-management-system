@@ -202,3 +202,71 @@ export async function searchTips(query: string): Promise<Tip[]> {
     throw new Error("Failed to search tips")
   }
 }
+
+/**
+ * Delete multiple tips at once
+ */
+export async function bulkDeleteTips(tipIds: string[]) {
+  if (!tipIds.length) {
+    return { success: false, error: "No tips selected" }
+  }
+
+  try {
+    await sql`
+      DELETE FROM tips 
+      WHERE id = ANY(${tipIds})
+    `
+    revalidatePath("/admin/tips")
+    revalidatePath("/tips")
+    return { success: true, message: `Successfully deleted ${tipIds.length} tips` }
+  } catch (error) {
+    console.error("Error deleting tips:", error)
+    return { success: false, error: "Failed to delete tips" }
+  }
+}
+
+/**
+ * Bulk publish tips
+ */
+export async function bulkPublishTips(tipIds: string[]) {
+  if (!tipIds.length) {
+    return { success: false, error: "No tips selected" }
+  }
+
+  try {
+    await sql`
+      UPDATE tips 
+      SET status = 'published', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ANY(${tipIds})
+    `
+    revalidatePath("/admin/tips")
+    revalidatePath("/tips")
+    return { success: true, message: `Successfully published ${tipIds.length} tips` }
+  } catch (error) {
+    console.error("Error publishing tips:", error)
+    return { success: false, error: "Failed to publish tips" }
+  }
+}
+
+/**
+ * Bulk unpublish tips
+ */
+export async function bulkUnpublishTips(tipIds: string[]) {
+  if (!tipIds.length) {
+    return { success: false, error: "No tips selected" }
+  }
+
+  try {
+    await sql`
+      UPDATE tips 
+      SET status = 'draft', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ANY(${tipIds})
+    `
+    revalidatePath("/admin/tips")
+    revalidatePath("/tips")
+    return { success: true, message: `Successfully unpublished ${tipIds.length} tips` }
+  } catch (error) {
+    console.error("Error unpublishing tips:", error)
+    return { success: false, error: "Failed to unpublish tips" }
+  }
+}

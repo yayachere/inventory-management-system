@@ -444,6 +444,150 @@ export async function deleteJob(id: string) {
   }
 }
 
+/**
+ * Delete multiple jobs at once
+ */
+export async function bulkDeleteJobs(jobIds: string[]) {
+  const session = await getSession()
+  if (!session) {
+    redirect("/login")
+  }
+
+  if (!jobIds.length) {
+    return { success: false, error: "No jobs selected" }
+  }
+
+  try {
+    await sql`DELETE FROM jobs WHERE id = ANY(${jobIds})`
+    revalidatePath("/admin")
+    return { success: true, message: `Successfully deleted ${jobIds.length} jobs` }
+  } catch (error) {
+    console.error("Error deleting jobs:", error)
+    return { success: false, error: "Failed to delete jobs" }
+  }
+}
+
+/**
+ * Bulk update job status to Active
+ */
+export async function bulkMarkActive(jobIds: string[]) {
+  const session = await getSession()
+  if (!session) {
+    redirect("/login")
+  }
+
+  if (!jobIds.length) {
+    return { success: false, error: "No jobs selected" }
+  }
+
+  try {
+    await sql`
+      UPDATE jobs 
+      SET updated_at = CURRENT_TIMESTAMP
+      WHERE id = ANY(${jobIds})
+    `
+    revalidatePath("/admin")
+    return { success: true, message: `Successfully marked ${jobIds.length} jobs as active` }
+  } catch (error) {
+    console.error("Error updating jobs:", error)
+    return { success: false, error: "Failed to update jobs" }
+  }
+}
+
+/**
+ * Get all expired jobs
+ */
+export async function getExpiredJobs(): Promise<Job[]> {
+  try {
+    const rows = await sql`
+      SELECT 
+        id::text,
+        title,
+        company,
+        location,
+        type,
+        COALESCE(salary, '') AS salary,
+        description,
+        COALESCE(requirements, '[]') AS requirements,
+        COALESCE(benefits, '[]') AS benefits,
+        posted_date::text,
+        application_deadline::text,
+        contact_email,
+        company_website,
+        application_link,
+        application_address,
+        COALESCE(education, '[]') AS education,
+        COALESCE(experience, '[]') AS experience,
+        COALESCE(skills, '[]') AS skills,
+        introduction,
+        company_logo,
+        category,
+        career_level,
+        how_to_apply,
+        vacancy_group_id,
+        COALESCE(is_primary_position, true) AS is_primary_position
+      FROM jobs
+      WHERE application_deadline < NOW()
+      AND COALESCE(is_primary_position, true) = true
+      ORDER BY application_deadline DESC
+    `
+    return (rows as any[]).map((j) => ({
+      id: j.id ?? "",
+      title: j.title ?? "",
+      company: j.company ?? "",
+      location: j.location ?? "",
+      type: j.type ?? "",
+      salary: j.salary ?? "",
+      description: j.description ?? "",
+      requirements: toArray(j.requirements),
+      benefits: toArray(j.benefits),
+      posted_date: j.posted_date ?? "",
+      application_deadline: j.application_deadline ?? "",
+      contact_email: j.contact_email ?? "",
+      company_website: j.company_website ?? undefined,
+      application_link: j.application_link ?? undefined,
+      application_address: j.application_address ?? undefined,
+      education: toArray(j.education),
+      experience: toArray(j.experience),
+      skills: toArray(j.skills),
+      introduction: j.introduction ?? undefined,
+      company_logo: j.company_logo ?? undefined,
+      category: j.category ?? undefined,
+      career_level: j.career_level ?? undefined,
+      how_to_apply: j.how_to_apply ?? undefined,
+      vacancy_group_id: j.vacancy_group_id ?? undefined,
+      is_primary_position: j.is_primary_position ?? true,
+    }))
+  } catch (error) {
+    console.error("Error fetching expired jobs:", error)
+    return []
+  }
+}
+
+/**
+ * Delete all expired jobs
+ */
+export async function deleteAllExpiredJobs() {
+  const session = await getSession()
+  if (!session) {
+    redirect("/login")
+  }
+
+  try {
+    const result = await sql`
+      DELETE FROM jobs 
+      WHERE application_deadline < NOW()
+      RETURNING id
+    `
+    const deletedCount = (result as any[]).length
+    revalidatePath("/admin")
+    return { success: true, message: `Successfully deleted ${deletedCount} expired jobs`, count: deletedCount }
+  } catch (error) {
+    console.error("Error deleting expired jobs:", error)
+    return { success: false, error: "Failed to delete expired jobs" }
+  }
+}
+
 export type UpdateJobState = { ok?: boolean; error?: string }
 
 export async function updateJobAction(_prevState: UpdateJobState, formData: FormData): Promise<UpdateJobState> {

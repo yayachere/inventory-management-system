@@ -18,8 +18,8 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Edit, Trash2, Filter, Eye, Star, Clock, TrendingUp, Users, Home, Lightbulb } from "lucide-react"
-import { getAllTips, deleteTip, type Tip } from "@/lib/actions/tips"
+import { Search, Edit, Trash2, Filter, Eye, Star, Clock, TrendingUp, Users, Home, Lightbulb, Trash } from "lucide-react"
+import { getAllTips, deleteTip, bulkDeleteTips, bulkPublishTips, bulkUnpublishTips, type Tip } from "@/lib/actions/tips"
 import TipPostingDialog from "@/components/tip-posting-dialog"
 import EditTipDialog from "@/components/edit-tip-dialog"
 import { useToast } from "@/hooks/use-toast"
@@ -36,6 +36,7 @@ export default function TipsAdminPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [deletingTipId, setDeletingTipId] = useState<string | null>(null)
+  const [selectedTips, setSelectedTips] = useState<Set<string>>(new Set())
   const { toast } = useToast()
 
   // Load tips
@@ -169,6 +170,113 @@ export default function TipsAdminPage() {
         return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  // Bulk selection handlers
+  const toggleSelection = (tipId: string) => {
+    const newSelected = new Set(selectedTips)
+    if (newSelected.has(tipId)) {
+      newSelected.delete(tipId)
+    } else {
+      newSelected.add(tipId)
+    }
+    setSelectedTips(newSelected)
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedTips.size === filteredTips.length) {
+      setSelectedTips(new Set())
+    } else {
+      setSelectedTips(new Set(filteredTips.map((tip) => tip.id)))
+    }
+  }
+
+  const clearSelection = () => {
+    setSelectedTips(new Set())
+  }
+
+  const handleBulkDelete = async () => {
+    const tipIds = Array.from(selectedTips)
+    try {
+      const result = await bulkDeleteTips(tipIds)
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: result.message,
+        })
+        clearSelection()
+        loadTips()
+      } else {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error deleting tips:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete tips",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleBulkPublish = async () => {
+    const tipIds = Array.from(selectedTips)
+    try {
+      const result = await bulkPublishTips(tipIds)
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: result.message,
+        })
+        clearSelection()
+        loadTips()
+      } else {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error publishing tips:", error)
+      toast({
+        title: "Error",
+        description: "Failed to publish tips",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleBulkUnpublish = async () => {
+    const tipIds = Array.from(selectedTips)
+    try {
+      const result = await bulkUnpublishTips(tipIds)
+      if (result.success) {
+        toast({
+          title: "Success",
+          description: result.message,
+        })
+        clearSelection()
+        loadTips()
+      } else {
+        toast({
+          title: "Error",
+          description: result.error,
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error unpublishing tips:", error)
+      toast({
+        title: "Error",
+        description: "Failed to unpublish tips",
+        variant: "destructive",
+      })
     }
   }
 
@@ -337,6 +445,55 @@ export default function TipsAdminPage() {
         </CardContent>
       </Card>
 
+      {/* Bulk Action Toolbar */}
+      {selectedTips.size > 0 && (
+        <Card className="bg-blue-50 border-blue-200">
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="text-sm font-medium text-gray-700">
+                {selectedTips.size} tip{selectedTips.size > 1 ? 's' : ''} selected
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={handleBulkPublish}>
+                  Publish Selected
+                </Button>
+                <Button variant="outline" size="sm" onClick={handleBulkUnpublish}>
+                  Unpublish Selected
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Delete Selected
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Tips</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Delete {selectedTips.size} selected tip{selectedTips.size > 1 ? 's' : ''}? This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={handleBulkDelete}
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <Button variant="outline" size="sm" onClick={clearSelection}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tips Table */}
       <Card>
         <CardHeader>
@@ -353,6 +510,15 @@ export default function TipsAdminPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">
+                      <input
+                        type="checkbox"
+                        checked={selectedTips.size === filteredTips.length && filteredTips.length > 0}
+                        indeterminate={selectedTips.size > 0 && selectedTips.size < filteredTips.length}
+                        onChange={toggleSelectAll}
+                        className="cursor-pointer"
+                      />
+                    </TableHead>
                     <TableHead>Title</TableHead>
                     <TableHead>Category</TableHead>
                     <TableHead>Author</TableHead>
@@ -365,7 +531,15 @@ export default function TipsAdminPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredTips.map((tip) => (
-                    <TableRow key={tip.id}>
+                    <TableRow key={tip.id} className={selectedTips.has(tip.id) ? "bg-blue-50" : ""}>
+                      <TableCell>
+                        <input
+                          type="checkbox"
+                          checked={selectedTips.has(tip.id)}
+                          onChange={() => toggleSelection(tip.id)}
+                          className="cursor-pointer"
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
                           {tip.is_featured && <Star className="h-4 w-4 text-yellow-500" />}
